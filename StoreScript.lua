@@ -33,6 +33,7 @@ local TwInfo = TweenInfo.new(
 debounce = false
 
 local function updateGui()
+	--replace information about current buyable object
 	ui.ItemInfo.ItemTitle.Text = currentItem.Name
 	ui.ItemInfo.ItemDescription.Text = currentItem:FindFirstChild("Description").Value
 	ui.ItemInfo.ItemPrice.Text = tostring(currentItem:FindFirstChild("Price").Value) .. " bux"
@@ -44,6 +45,7 @@ local function placeItem(itemIndex)
 end
 
 script.Parent.Activated:Connect(function()
+	--check if button store gui is active
 	if uiEnabled == true then
 		uiEnabled = false
 		ui.Visible = false
@@ -66,6 +68,7 @@ script.Parent.Activated:Connect(function()
 end)
 
 local function MoveObject(axisX)
+	--animating and destroying previous buyable object
 	local itemToDestroy = currentItem
 	switchSnd:Play()
 
@@ -91,8 +94,10 @@ end
 
 ui.Left.Activated:Connect(function()
 	if not debounce then
+		--debounce to prevent playing lots of animations at the same time
 		debounce = true
 		if currentItemIndex == 1 then
+			--if left arrow pressed and current item is 1st in array,then this will set object to last in array
 			currentItemIndex = #itemsFolder:GetChildren()
 			MoveObject(6)
 		else
@@ -106,6 +111,7 @@ ui.Right.Activated:Connect(function()
 	if not debounce then
 		debounce = true
 		if currentItemIndex == #itemsFolder:GetChildren() then
+			--if right arrow pressed and current item is last in array,then this will set object to first
 			currentItemIndex = 1
 			MoveObject(-6)
 		else
@@ -121,67 +127,45 @@ ui.ItemInfo.BuyButton.Activated:Connect(function()
 		if player:FindFirstChild("leaderstats"):FindFirstChild("Cash") then
 			local plrCash = player:FindFirstChild("leaderstats"):FindFirstChild("Cash").Value
 			
-			if plrCash >= currentItem:FindFirstChild("Price").Value then
-				remote:FireServer(currentItem.Name)
-			else
-				remote:FireServer(currentItem.Name)
-			end
+			remote:FireServer(currentItem.Name)
+			--calls server script to check if player has enough money to buy something.We're checking it in server script to
+			--to prevent client-sided scripts
 		end
 	end
 end)
+local function createNotification(NotificationSound,NotificationColor,NotificationText)
+	NotificationSound:Play()
+	local notification = messageText:Clone()
+	notification.Parent = messageText.Parent
+	notification.TextColor3 = succesfulColor
+	notification.Visible = true
+	notification.Text = NotificationText
+		
+	notification.Position += UDim2.new(0,0,0.5,0)
+	local goal = {}
+	goal.Position = (notification.Position) - UDim2.new(0,0,0.6,0)
+		
+	local tw = TweenService:Create(notification,TwInfo,goal)
+	tw:Play()
+	tw.Completed:Connect(function()
+		task.wait(2)
+			
+		goal.Position = (notification.Position) - UDim2.new(0,0,3,0)
 
+		local tw = TweenService:Create(notification,TwInfo,goal)
+		tw:Play()
+			
+		tw.Completed:Connect(function()
+			notification:Destroy()
+		end)
+	end)
+end
 remote.OnClientEvent:Connect(function(success)
 	if success then
-		buySnd:Play()
-		local notification = messageText:Clone()
-		notification.Parent = messageText.Parent
-		notification.TextColor3 = succesfulColor
-		notification.Visible = true
-		notification.Text = "Successfuly bought!"
-		
-		notification.Position += UDim2.new(0,0,0.5,0)
-		local goal = {}
-		goal.Position = (notification.Position) - UDim2.new(0,0,0.6,0)
-		
-		local tw = TweenService:Create(notification,TwInfo,goal)
-		tw:Play()
-		tw.Completed:Connect(function()
-			task.wait(2)
-			
-			goal.Position = (notification.Position) - UDim2.new(0,0,3,0)
-
-			local tw = TweenService:Create(notification,TwInfo,goal)
-			tw:Play()
-			
-			tw.Completed:Connect(function()
-				notification:Destroy()
-			end)
-		end)
+		--if player has enough money we display "Success" notification
+		createNotification(buySnd,succesfulColor,"Successfuly bought!")
 	else
-		errorSnd:Play()
-		local notification = messageText:Clone()
-		notification.Parent = messageText.Parent
-		notification.TextColor3 = errorColor
-		notification.Visible = true
-		notification.Text = "Error, not enough funds!"
-
-		notification.Position += UDim2.new(0,0,0.5,0)
-		local goal = {}
-		goal.Position = (notification.Position) - UDim2.new(0,0,0.6,0)
-
-		local tw = TweenService:Create(notification,TwInfo,goal)
-		tw:Play()
-		tw.Completed:Connect(function()
-			task.wait(2)
-
-			goal.Position = (notification.Position) - UDim2.new(0,0,3,0)
-
-			local tw = TweenService:Create(notification,TwInfo,goal)
-			tw:Play()
-
-			tw.Completed:Connect(function()
-				notification:Destroy()
-			end)
-		end)
+		--or if player doesnt have enough then erro message
+		createNotification(errorSnd,errorColor,"Error, not enough funds!")
 	end
 end)
