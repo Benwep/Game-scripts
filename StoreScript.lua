@@ -49,6 +49,7 @@ script.Parent.Activated:Connect(function()
 	if uiEnabled == true then
 		uiEnabled = false
 		ui.Visible = false
+		currentItem:FindFirstChild("Highlight"):Destroy()
 		game.Workspace.CurrentCamera.CameraType = Enum.CameraType.Custom
 		StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, true)
 	else
@@ -63,6 +64,9 @@ script.Parent.Activated:Connect(function()
 			ItemOutline = outline:Clone()
 			ItemOutline.Parent = currentItem
 			updateGui()
+		else
+			ItemOutline = outline:Clone()
+			ItemOutline.Parent = currentItem
 		end
 	end
 end)
