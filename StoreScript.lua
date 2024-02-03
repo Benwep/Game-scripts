@@ -13,6 +13,8 @@ local switchSnd = soundsFolder:WaitForChild("SwitchSound")
 local buySnd = soundsFolder:WaitForChild("BuySound")
 local errorSnd = soundsFolder:WaitForChild("ErrorSound")
 local StarterGui = game:GetService("StarterGui")
+local TransitionFrame = ui.Parent.TransitionFrame
+local Stroke = TransitionFrame:WaitForChild("UIStroke")
 local outline = Instance.new("Highlight")
 outline.FillTransparency = 1
 local TweenService = game:GetService("TweenService")
@@ -25,41 +27,89 @@ local TwInfo = TweenInfo.new(
 	0
 )
 debounce = false
+animationPlayed = 0 -- amount of calling PlayTransitionAnimation() function, to prevent it from scaling infinitely
+--if animationPlayed = 2 then it would stop
 local function updateGui()
 	--replace information about current buyable object
 	ui.ItemInfo.ItemTitle.Text = currentItem.Name
 	ui.ItemInfo.ItemDescription.Text = currentItem:FindFirstChild("Description").Value
-	ui.ItemInfo.ItemPrice.Text = tostring(currentItem:FindFirstChild("Price").Value) .. " bux"
+	if currentItem:FindFirstChild("Stock").Value >= 1 then
+		ui.ItemInfo.ItemPrice.Text = tostring(currentItem:FindFirstChild("Price").Value) .. " bux"
+	else
+		ui.ItemInfo.ItemPrice.Text = "Sold out"
+	end
+	ui.ItemInfo.StockAmount.Text = tostring("Stock:".. itemsFolder:FindFirstChild(currentItem.Name).Stock.Value)
+end
+for i,v in itemsFolder:GetChildren() do
+	v:FindFirstChild("Stock").Changed:Connect(function()
+		updateGui()
+	end)
 end
 local function placeItem(itemIndex)
 	currentItem = itemsFolder:GetChildren()[itemIndex]:Clone()
 	currentItem.Parent = workspace
 	currentItem.Position = game.Workspace.Store.ItemPos.Position
 end
-
+local function PlayTransitionAnimation(strokeThickness,Uistroke)
+	local goal = {}
+	goal.Thickness = strokeThickness
+	local tw = TweenService:Create(Uistroke,TwInfo,goal)
+	tw:Play()
+	tw.Completed:Connect(function()
+		if animationPlayed < 1 then
+			animationPlayed += 1
+			task.wait(0.5)
+			if strokeThickness >= 999 then -- make frame shrink back after animation ended
+				strokeThickness = 0
+			else
+				strokeThickness = 999
+			end
+			tw = PlayTransitionAnimation(strokeThickness,Uistroke)
+		else
+			animationPlayed = 0
+			task.wait(0.5)
+		end
+	end)
+	return tw
+end
+local function moveInfoFrame(pos)
+	local goal = {} -- play animation with item info frame
+	goal.Position = ui.ItemInfo.Position
+	ui.ItemInfo.Position -= UDim2.new(pos,0,0,0)
+	tween = TweenService:Create(ui.ItemInfo,TwInfo,goal)
+	task.wait(0.5)
+	tween:Play()
+end
 script.Parent.Activated:Connect(function()
 	--check if button store gui is active
 	if uiEnabled == true then
 		uiEnabled = false
-		ui.Visible = false
-		currentItem:FindFirstChild("Highlight"):Destroy()
-		game.Workspace.CurrentCamera.CameraType = Enum.CameraType.Custom
-		StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, true)
+		local tween = PlayTransitionAnimation(999,Stroke)
+		tween.Completed:Connect(function()
+			ui.Visible = false
+			currentItem:FindFirstChild("Highlight"):Destroy()
+			game.Workspace.CurrentCamera.CameraType = Enum.CameraType.Custom
+			StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, true)
+		end)
 	else
 		uiEnabled = true
-		game.Workspace.CurrentCamera.CameraType = Enum.CameraType.Scriptable
-		game.Workspace.CurrentCamera.CFrame = game.Workspace.StoreCamera.CFrame
-		ui.Visible = true
-		StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, false)
-		if currentItem == nil then
-			placeItem(1)
-			ItemOutline = outline:Clone()
-			ItemOutline.Parent = currentItem
-			updateGui()
-		else
-			ItemOutline = outline:Clone()
-			ItemOutline.Parent = currentItem
-		end
+		local tween = PlayTransitionAnimation(999,Stroke)
+		tween.Completed:Connect(function()
+			game.Workspace.CurrentCamera.CameraType = Enum.CameraType.Scriptable
+			game.Workspace.CurrentCamera.CFrame = game.Workspace.StoreCamera.CFrame
+			ui.Visible = true
+			moveInfoFrame(1)
+			StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, false)
+			if currentItem == nil then
+				placeItem(1)
+				ItemOutline = outline:Clone()
+				ItemOutline.Parent = currentItem
+				updateGui()
+			else
+				ItemOutline = outline:Clone()
+				ItemOutline.Parent = currentItem
+			end
+		end)	
 	end
 end)
 
@@ -80,7 +130,6 @@ local function MoveObject(axisX)
 	goal.Position = currentItem.Position - Vector3.new(axisX,0,0)
 	tw = TweenService:Create(currentItem,TwInfo,goal)
 	tw:Play()
-
 	ItemOutline = outline:Clone()
 	ItemOutline.Parent = currentItem
 	updateGui()
@@ -115,22 +164,11 @@ ui.Right.Activated:Connect(function()
 	end
 
 end)
-
-ui.ItemInfo.BuyButton.Activated:Connect(function()
-	if player:FindFirstChild("leaderstats") then
-		if player:FindFirstChild("leaderstats"):FindFirstChild("Cash") then
-			local plrCash = player:FindFirstChild("leaderstats"):FindFirstChild("Cash").Value
-			remote:FireServer(currentItem.Name)
-			--calls server script to check if player has enough money to buy something.We're checking it in server script to
-			--to prevent client-sided scripts
-		end
-	end
-end)
 local function createNotification(NotificationSound,NotificationColor,NotificationText)
 	NotificationSound:Play()
 	local notification = messageText:Clone()
 	notification.Parent = messageText.Parent
-	notification.TextColor3 = succesfulColor
+	notification.TextColor3 = NotificationColor
 	notification.Visible = true
 	notification.Text = NotificationText
 	notification.Position += UDim2.new(0,0,0.5,0)
@@ -148,6 +186,20 @@ local function createNotification(NotificationSound,NotificationColor,Notificati
 		end)
 	end)
 end
+ui.ItemInfo.BuyButton.Activated:Connect(function()
+	if player:FindFirstChild("leaderstats") then
+		if player:FindFirstChild("leaderstats"):FindFirstChild("Cash") then
+			if itemsFolder:FindFirstChild(currentItem.Name).Stock.Value >= 1 then
+				local plrCash = player:FindFirstChild("leaderstats"):FindFirstChild("Cash").Value
+				remote:FireServer(currentItem.Name)
+			else
+				createNotification(errorSnd,errorColor,"Item out of stock!")
+			end	
+			--calls server script to check if player has enough money to buy something.We're checking it in server script to
+			--to prevent client-sided scripts
+		end
+	end
+end)
 remote.OnClientEvent:Connect(function(success)
 	if success then
 		--if player has enough money we display "Success" notification
