@@ -87,7 +87,9 @@ script.Parent.Activated:Connect(function()
 		local tween = PlayTransitionAnimation(999,Stroke)
 		tween.Completed:Connect(function()
 			ui.Visible = false
-			currentItem:FindFirstChild("Highlight"):Destroy()
+			if currentItem:FindFirstChild("Highlight") then
+				currentItem:FindFirstChild("Highlight"):Destroy()
+			end
 			game.Workspace.CurrentCamera.CameraType = Enum.CameraType.Custom
 			StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, true)
 		end)
