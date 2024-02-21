@@ -79,28 +79,38 @@ game.Players.PlayerAdded:Connect(function(plr)
 		CreateWeld(swordPos,char.Torso)
 	end)
 end)
-
+local function DestroyWelds(sword)
+	for i,v in sword:GetChildren() do
+		if v:IsA("WeldConstraint") or v:IsA("Weld") then
+			v:Destroy()
+		end
+	end
+end
+local function HideSword(hitBox,weld,char,sword)
+	hitBox:Destroy()
+	weld:Destroy()
+	if char:FindFirstChild("SwordPos") then
+		sword.CFrame = char:FindFirstChild("SwordPos").CFrame
+		CreateWeld(sword,char.Torso)
+	end
+end
 attackEvent.OnServerEvent:Connect(function(plr)
 	local char = plr.Character
 	if char:FindFirstChild("Sword") then
 		if not isAttacking and canAttack then
 			isAttacking = true
-
 			local sword = char:FindFirstChild("Sword")
 			local rightArm = char["Right Arm"]
 			local root = char:FindFirstChild("HumanoidRootPart")
 			local previousCFrame = sword.CFrame
-
-			sword:FindFirstChild("WeldConstraint"):Destroy()
+			sword:FindFirstChild("SwordSlash"):Play()
+			DestroyWelds(sword)
 			local weld = Instance.new("Weld")
 			weld.Parent = sword
 			weld.Part0 = sword:FindFirstChild("Arm")
 			weld.Part1 = rightArm
-
 			local animTrack = char.Humanoid:LoadAnimation(slash1)
 			animTrack:Play()
-			sword:FindFirstChild("SwordSlash"):Play()
-
 			local hitBox = Instance.new("Part")
 			hitBox.Size = Vector3.new(5,6,4.5)
 			hitBox.Parent = char
@@ -117,40 +127,31 @@ attackEvent.OnServerEvent:Connect(function(plr)
 						if not plrGotHurt then
 							if not hum:FindFirstChild("Block") and not hum:FindFirstChild("Parry") then
 								hum.Health -= slashDamage
-								local speed = hum.WalkSpeed
-								hum.WalkSpeed = 3
-
+								local speedToTake = 10
+								hum.WalkSpeed -= speedToTake
 								table.insert(TouchedParts,hum.Parent)
 								task.wait(0.2)
-								hum.WalkSpeed = speed
+								hum.WalkSpeed -= speedToTake
 							elseif hum:FindFirstChild("Parry") and hum:FindFirstChild("Parry").Value == true then
 								local snd = parrySound:Clone()
 								snd.Parent = workspace
 								local ui = ParryUi
 								TextEffect(char,hitBox,animTrack,hum,snd,ui,true)
+								sword:FindFirstChild("SwordSlash"):Stop()
+								HideSword(hitBox,weld,char,sword) -- hide sword after getting parried
 							elseif hum:FindFirstChild("Block") and hum:FindFirstChild("Block").Value == true then
 								table.insert(TouchedParts,hum.Parent)
 								local snd = parrySound:Clone()
 								local ui = BlockUi
 								TextEffect(char,hitBox,animTrack,hum,snd,ui,false)
-
 							end
 						end
 					end
 				end
 			end)
-
 			task.wait(animTrack.Length)
+			HideSword(hitBox,weld,char,sword) -- hide sword if player didnt get parried
 			attackEvent:FireClient(plr) -- fire player's event to allow dashing or attacking again
-			hitBox:Destroy()
-			weld:Destroy()
-			if char:FindFirstChild("SwordPos") then
-				sword.CFrame = char:FindFirstChild("SwordPos").CFrame
-
-				CreateWeld(sword,char.Torso)
-			end
-
-
 			isAttacking = false
 		end
 	end
@@ -164,50 +165,56 @@ local function CreateValue(name,char)
 	valv.Name = name
 	valv.Value = true
 	valv.Parent = char
-	
 	return valv
+end
+local function DestroyBlock(char,animTrack,sword)
+	local block = char.Humanoid:FindFirstChild("Block")
+	local parry = char.Humanoid:FindFirstChild("Parry")
+	if block then
+		block:Destroy()
+	end
+	if parry then
+		parry:Destroy()
+	end
+	if animTrack then
+		animTrack:Stop()	
+	end
+	char.Humanoid.WalkSpeed = game.StarterPlayer.CharacterWalkSpeed
+	DestroyWelds(sword)
+	if char:FindFirstChild("SwordPos") then
+		sword.CFrame = char:FindFirstChild("SwordPos").CFrame
+
+		CreateWeld(sword,char.Torso)
+	end
+	canBlock = true
 end
 game.ReplicatedStorage.Events.Block.OnServerEvent:Connect(function(plr)
 	local char = plr.Character
-	if canBlock then
+	sword = char:FindFirstChild("Sword")
+	if canBlock and not isAttacking then
 		if char.Humanoid:FindFirstChild("Block") or char.Humanoid:FindFirstChild("Parry") then
-			local block = char.Humanoid:FindFirstChild("Block")
-			local parry = char.Humanoid:FindFirstChild("Parry")
-			if block then
-				block:Destroy()
-			end
-			if parry then
-				parry:Destroy()
-			end
-			animTrack:Stop()
-			char.Humanoid.WalkSpeed = game.StarterPlayer.CharacterWalkSpeed
-			weld:Destroy()
-			if char:FindFirstChild("SwordPos") then
-				sword.CFrame = char:FindFirstChild("SwordPos").CFrame
-
-				CreateWeld(sword,char.Torso)
-			end
+			DestroyBlock(char,animTrack,sword)
 		else	
 			canBlock = false
 			local var = CreateValue("Parry",char.Humanoid)
 			char.Humanoid.WalkSpeed = 4
-
-			sword = char:FindFirstChild("Sword")
 			local rightArm = char["Right Arm"]
 			local root = char:FindFirstChild("HumanoidRootPart")
-
-			sword:FindFirstChild("WeldConstraint"):Destroy()
+			DestroyWelds(sword)
 			weld = Instance.new("Weld")
 			weld.Parent = sword
 			weld.Part0 = sword:FindFirstChild("Arm")
 			weld.Part1 = rightArm
-
 			animTrack = char.Humanoid:LoadAnimation(blockAnimation)
 			animTrack:Play()
 			task.wait(0.2)
 			var:Destroy()
-			var = CreateValue("Block",char.Humanoid)
-			canBlock = true
+			if not canBlock then
+				var = CreateValue("Block",char.Humanoid)
+				canBlock = true
+			end
 		end
+	else
+		DestroyBlock(char,animTrack,sword)
 	end
 end)
